@@ -1,0 +1,191 @@
+/* ============================================================
+   Video Inpainting — page-specific styles, layered on the
+   shared styles.css used by the sibling project pages.
+   ============================================================ */
+
+:root {
+  --canvas-max-h: min(68vh, 560px);
+}
+
+/* the shared styles give some hideable elements a display, which would override [hidden] */
+[hidden] { display: none !important; }
+
+.hero__sub a, .paper-callout a:not(.btn) { text-decoration: underline; text-underline-offset: 2px; }
+.hero__cta { margin-bottom: 40px; }
+
+/* alternating backgrounds separate the sections, so no rules between them;
+   full-bleed sections keep their content on the same column as the rest */
+.section { border-bottom: none; }
+.section--alt > * { max-width: calc(var(--maxw) - 64px); }
+.footer { border-top: 1px solid var(--line); }
+
+/* ---------- inpaint figure: one canvas + Input/Inpainted toggle ---------- */
+.op-figure { margin: 0 auto; max-width: var(--maxw); }
+.op-figure--hero { max-width: 960px; margin-bottom: 40px; }
+
+/* sized so tall canvases stay within the viewport and wide ones within the column */
+.op-canvas.video-tile {
+  aspect-ratio: var(--ar, 16 / 9);
+  width: min(100%, calc(var(--canvas-max-h) * var(--arn, 1.7778)));
+  margin: 0 auto;
+  box-shadow: var(--shadow);
+}
+.op-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+/* "Input": the generating-state overlay (WebGL, drawn by main.js) covers the masked region;
+   clicks pass through to the controls */
+.op-noise { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+
+.op-figure__bar {
+  display: flex; align-items: center; justify-content: center; gap: 10px 16px; flex-wrap: wrap;
+  margin-top: 16px;
+}
+.op-figure__caption { text-align: center; margin-top: 12px; }
+.op-figure__title { font-weight: 600; font-size: 17px; color: var(--ink); }
+.op-figure__note {
+  max-width: 560px; margin: 10px auto 0; text-align: center;
+  color: var(--ink-soft); font-size: 15px;
+}
+
+.op-toggle {
+  display: inline-flex; padding: 3px; gap: 2px;
+  background: #fff; border: 1px solid var(--neutral-200); border-radius: 999px;
+}
+.op-toggle button {
+  font-family: var(--font-mono); font-size: 12.5px; cursor: pointer;
+  padding: 6px 14px; border-radius: 999px; border: none;
+  background: transparent; color: var(--edit-maroon);
+  transition: background 0.18s, color 0.18s;
+}
+.op-toggle button:hover { color: var(--rec-red-dk); }
+.op-toggle button.is-active { background: var(--edit-maroon); color: #fff; }
+
+/* ---------- clip picker ---------- */
+.op-thumbs {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+  margin-top: 22px;
+}
+.op-thumb {
+  flex: 0 0 auto; height: 76px; aspect-ratio: var(--arn); padding: 0; cursor: pointer;
+  border-radius: var(--radius-sm); overflow: hidden; background: #1b1418;
+  border: 2px solid transparent; outline-offset: 2px;
+  opacity: 0.6; transition: opacity 0.18s, border-color 0.18s;
+}
+.op-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.op-thumb:hover { opacity: 0.9; }
+.op-thumb.is-active { opacity: 1; border-color: var(--rec-red); }
+@media (max-width: 640px) {
+  .op-thumbs {
+    flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none;
+    margin-left: calc(-1 * clamp(18px, 4vw, 32px)); margin-right: calc(-1 * clamp(18px, 4vw, 32px));
+    padding: 0 clamp(18px, 4vw, 32px) 2px;
+  }
+  .op-thumbs::-webkit-scrollbar { display: none; }
+  .op-thumb { height: 64px; }
+}
+
+/* ---------- example player: Original → Masked → Inpainted ---------- */
+/* the packed poster's source panel shows until the first frame is drawn */
+.ip-canvas { background: #1b1418 var(--poster, none) 0 0 / 300% 100% no-repeat; container-type: size; }
+.ip-render { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+.ip-canvas.has-frame .ip-render { opacity: 1; }
+/* drawn through WebGL; kept rendered (not display: none) so every browser keeps decoding it */
+.ip-video { position: absolute; top: 0; left: 0; width: 300%; height: 100%; opacity: 0; pointer-events: none; }
+.ip-canvas.no-webgl .ip-video { opacity: 1; left: -100%; }
+
+.ip-thumb { background-repeat: no-repeat; background-size: 300% 100%; background-position: 50% 0; }
+.ip-thumb--placeholder {
+  display: grid; place-items: center;
+  background: radial-gradient(120% 90% at 50% 28%, #fff 0%, var(--canvas) 55%, #f3e7e0 100%);
+}
+.ip-thumb__label { font-size: 10px; line-height: 1.2; color: var(--ink-soft); padding: 0 6px; text-align: center; }
+
+/* placeholder stand-in: a subject, an object to remove, and a grainy mask over it */
+.ip-ph {
+  display: none; position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 28%, #fff 0%, var(--canvas) 55%, #f3e7e0 100%);
+}
+.ip-canvas.is-placeholder .ip-ph { display: block; }
+.ip-canvas.is-placeholder .video-tile__play,
+.ip-canvas.is-placeholder .scrubber,
+.ip-canvas.is-placeholder .video-tile__mute,
+.ip-canvas.is-placeholder .video-tile__fs { display: none; }
+.ip-ph__subject { position: absolute; left: 32%; top: 50%; transform: translate(-50%, -50%); }
+.ip-ph__subject, .ip-ph__subject .ph-face { display: block; }
+.ip-ph__object, .ip-ph__mask { position: absolute; left: 66%; top: 52%; aspect-ratio: 1; transform: translate(-50%, -50%); }
+.ip-ph__object {
+  width: 18cqmin; border-radius: 22%; rotate: 8deg;
+  background: linear-gradient(160deg, var(--peach), var(--rec-red));
+  box-shadow: 0 8px 22px rgba(184, 27, 30, 0.3);
+  transition: opacity 0.35s;
+}
+.ip-ph__mask {
+  width: 28cqmin; border-radius: 42%; opacity: 0;
+  background-color: var(--screen-black);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.85  0 0 0 0 0.6  0 0 0 0 0.5  0 0 0 2.2 -0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 120px 120px;
+  animation: phGrain 0.3s steps(3) infinite;
+  transition: opacity 0.45s ease-out;
+}
+@keyframes phGrain {
+  0% { background-position: 0 0; }
+  33% { background-position: -41px 23px; }
+  66% { background-position: 19px -37px; }
+  100% { background-position: 0 0; }
+}
+.ip-mode-masked .ip-ph__mask { opacity: 1; }
+.ip-mode-inpainted .ip-ph__object { opacity: 0; transition: none; }
+.ip-mode-inpainted .ip-ph__mask { transition-duration: 0.9s; }
+.ip-ph__label {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  font-size: 12px; letter-spacing: 0.03em; color: var(--ink-faint); white-space: nowrap;
+}
+
+/* ---------- method ---------- */
+.op-prose { max-width: var(--maxw-narrow); }
+
+/* ---------- ATS vs AR tree figure ---------- */
+.tree {
+  margin: 28px 0 0; padding: clamp(16px, 3vw, 22px); background: #fff; border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.tree__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.tree__legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-soft); }
+.tree__legend span { display: inline-flex; align-items: center; gap: 6px; }
+.tl { display: inline-block; width: 11px; height: 11px; border-radius: 2px; }
+.tl--anchor { background: var(--edit-maroon); }
+.tl--leaf { background: var(--peach); }
+.tl--drift { background: linear-gradient(90deg, var(--peach), #9fb08a); }
+.tree__lane { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; align-items: end; }
+.tree__lane + .tree__lane { margin-top: 18px; }
+.tree__label { display: flex; flex-direction: column; gap: 2px; padding-bottom: 2px; }
+.tree__label strong { font-size: 15px; color: var(--ink); }
+.tree__label span { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-faint); min-height: 1.4em; }
+.tree__track { position: relative; padding-top: 14px; }
+.tree__brackets { position: absolute; left: 0; right: 0; top: 0; height: 10px; }
+.tree__bracket {
+  position: absolute; top: 0; height: 9px;
+  border: 1.5px solid var(--rec-red); border-bottom: none; border-radius: 3px 3px 0 0;
+  animation: bracketIn 0.35s ease-out;
+}
+@keyframes bracketIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.tree__row { display: grid; gap: 2px; height: 34px; }
+.tcell { border-radius: 2px; background: var(--neutral-50); transition: background-color 0.35s; }
+.tcell.is-root { background: var(--edit-maroon); }
+.tcell.is-guide { background: #a2416a; }
+.tcell.is-leaf { background: var(--peach); }
+.tcell.is-new { animation: cellPop 0.5s ease-out; }
+@keyframes cellPop { 0% { transform: scaleY(0.4); } 60% { transform: scaleY(1.15); } 100% { transform: none; } }
+.tree__cap { margin-top: 16px; font-size: 14px; color: var(--ink-soft); max-width: var(--maxw-narrow); }
+@media (max-width: 640px) {
+  .tree__lane { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .tree__label { flex-direction: row; align-items: baseline; gap: 10px; }
+  .tree__row { gap: 1px; height: 26px; }
+  .tcell { border-radius: 1px; }
+}
+
+.paper-callout--wide { margin-top: 28px; }
+.cite-sub { margin-top: 22px; }
+@media (max-width: 560px) {
+  .cite-block pre { font-size: 12px; padding-top: 48px; }
+  .hero__sub { font-size: 16px; }
+}

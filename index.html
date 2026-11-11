@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Inpainting: Regenerating Long Video with Anchored Tree Sampling</title>
+  <meta name="description" content="Video inpainting regenerates a masked region of a video and leaves everything around it untouched. Anchored Tree Sampling keeps the fill consistent for minutes, not seconds." />
+  <link rel="icon" type="image/png" sizes="96x96" href="https://static-cdn.descript.com/web/icons/favicon-96x96.png" />
+  <link rel="icon" type="image/svg+xml" href="https://static-cdn.descript.com/web/icons/favicon.svg" />
+  <link rel="shortcut icon" href="https://static-cdn.descript.com/web/icons/favicon.ico" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="inpaint.css" />
+</head>
+<body>
+  <!-- HERO -->
+  <section class="hero" id="top">
+    <div class="hero__inner">
+      <h1 class="hero__title">Video Inpainting</h1>
+      <p class="hero__tagline">Regenerating any region of a video, <em>consistently for as long as it runs</em></p>
+      <!-- TODO: confirm author list and order -->
+      <div class="authors">
+        <span>Matthew Bendel</span>
+        <span>Vicki Anand</span>
+        <span>Stephen W. Bailey</span>
+        <span>Mithilesh Vaidya</span>
+        <span>Sumukh Badam</span>
+        <span>Xingzhe He</span>
+      </div>
+      <p class="affiliations">Descript, Inc.</p>
+      <div class="hero__cta">
+        <a class="btn btn--primary" href="https://descriptinc.github.io/ATS/" target="_blank" rel="noopener">ATS project page ↗</a>
+        <a class="btn btn--ghost" href="https://arxiv.org/abs/2605.20476" target="_blank" rel="noopener">ATS paper ↗</a>
+        <a class="btn btn--ghost" href="https://descriptinc.github.io/video-outpainting/">Video Outpainting →</a>
+      </div>
+    </div>
+
+    <figure class="op-figure op-figure--hero" data-op="hero">
+      <p class="op-figure__note">A single 41-minute inpaint: everything inside the stage region is generated.</p>
+    </figure>
+
+    <p class="hero__sub">
+      Inpainting fills a masked region of a video with new content that matches everything around
+      it. The rest of the frame stays untouched, and <strong>the fill holds steady for the full
+      length of the video</strong>. Long videos are possible because of
+      <a href="https://descriptinc.github.io/ATS/" target="_blank" rel="noopener">Anchored Tree Sampling</a>.
+    </p>
+  </section>
+
+  <!-- EXAMPLES (shown once main.js lists example clips) -->
+  <section class="section section--alt" id="examples" hidden>
+    <div class="section__head"><h2>Examples</h2></div>
+    <p class="prose prose--lead">
+      Each clip plays its <em>Original</em>, then the <em>Masked</em> region to regenerate, then
+      the <em>Inpainted</em> result. Use the toggle to step between them.
+    </p>
+    <figure class="op-figure" data-op="gallery">
+      <div class="op-thumbs" id="op-thumbs"></div>
+    </figure>
+  </section>
+
+  <!-- METHOD -->
+  <section class="section" id="method">
+    <div class="section__head"><h2>Method</h2></div>
+    <p class="prose prose--lead">
+      Inpainting regenerates a masked region and leaves the rest of the frame untouched. A
+      pretrained video-to-video generator fills the region so it moves with the scene around it.
+      The hard part is doing that consistently for minutes at a time.
+    </p>
+
+    <h3 class="subhead">Anchored Tree Sampling</h3>
+    <div class="prose op-prose">
+      <p>
+        The model generates a few seconds at a time, so long videos are usually built by
+        <strong>autoregressive rollout</strong>: each chunk is conditioned on the one before it.
+        Errors compound, and the fill slowly <strong>drifts</strong>. Surrounded on every side by
+        footage that never changes, that drift is easy to see.
+      </p>
+      <p>
+        <strong>ATS</strong> fills the timeline sparse to dense instead. A <strong>root</strong> call
+        places anchor frames across the whole video, <strong>guidance</strong> calls add anchors
+        between them, and <strong>leaf</strong> calls fill each span between neighboring anchors.
+        Every call after the root is bracketed by anchors on both sides, so drift stays bounded
+        no matter how long the video is. Calls on the same level are independent and run in parallel.
+      </p>
+    </div>
+
+    <figure class="tree" id="ats-tree">
+      <div class="tree__head">
+        <button class="reveal-btn" type="button" id="tree-run">Run again ▶</button>
+        <div class="tree__legend">
+          <span><i class="tl tl--anchor"></i>anchors</span>
+          <span><i class="tl tl--leaf"></i>filled</span>
+          <span><i class="tl tl--drift"></i>drifted</span>
+        </div>
+      </div>
+      <div class="tree__lane">
+        <div class="tree__label"><strong>ATS</strong><span id="tree-ats-step"></span></div>
+        <div class="tree__track">
+          <div class="tree__brackets" id="tree-ats-brackets"></div>
+          <div class="tree__row" id="tree-ats-row"></div>
+        </div>
+      </div>
+      <div class="tree__lane">
+        <div class="tree__label"><strong>Autoregressive</strong><span id="tree-ar-step"></span></div>
+        <div class="tree__track">
+          <div class="tree__brackets" id="tree-ar-brackets"></div>
+          <div class="tree__row" id="tree-ar-row"></div>
+        </div>
+      </div>
+      <figcaption class="tree__cap">
+        Each tick is one round of GPU calls. ATS finishes in 3 rounds; autoregressive rollout takes
+        12, and each chunk inherits the drift of the one before.
+      </figcaption>
+    </figure>
+
+    <aside class="paper-callout paper-callout--wide">
+      <p class="paper-callout__tag">The tree that unlocks long generation</p>
+      <p class="paper-callout__title">Goodbye Drift: Anchored Tree Sampling for Long-Horizon Video-to-Video Generation</p>
+      <p class="paper-callout__authors">
+        A training-free scheduler for any two-sided video-to-video generator. The paper shows stable
+        40+ minute generations across five conditioning modalities, inpainting included, and a
+        5.3× speedup over the strongest autoregressive baseline at a 2000&nbsp;s horizon.
+      </p>
+      <div class="paper-callout__links">
+        <a class="btn btn--sm btn--primary" href="https://descriptinc.github.io/ATS/" target="_blank" rel="noopener">ATS project page ↗</a>
+        <a class="btn btn--sm btn--ghost" href="https://arxiv.org/abs/2605.20476" target="_blank" rel="noopener">arXiv ↗</a>
+      </div>
+    </aside>
+
+    <aside class="paper-callout paper-callout--wide">
+      <p class="paper-callout__tag">Companion work</p>
+      <p class="paper-callout__title">Video Outpainting</p>
+      <p class="paper-callout__authors">
+        The same tree with the mask on the outside: reframing a video onto a new canvas and
+        generating everything beyond the original frame.
+      </p>
+      <div class="paper-callout__links">
+        <a class="btn btn--sm" href="https://descriptinc.github.io/video-outpainting/">Video Outpainting →</a>
+      </div>
+    </aside>
+  </section>
+
+  <!-- CITATION -->
+  <section class="section section--alt section--cite" id="citation">
+    <div class="section__head"><h2>Citation</h2></div>
+    <p class="prose">If you reference this work, please cite:</p>
+    <div class="cite-block">
+      <button class="cite-copy" type="button">Copy</button>
+      <pre>@misc{bendel2026videoinpainting,
+  title         = {Video Inpainting: Regenerating Long Video with Anchored Tree Sampling},
+  author        = {Matthew Bendel and Vicki Anand and Stephen W. Bailey and
+                   Mithilesh Vaidya and Sumukh Badam and Xingzhe He},
+  year          = {2026},
+  howpublished  = {Descript, Inc.},
+  url           = {https://descriptinc.github.io/video-inpainting/}
+}</pre>
+    </div>
+    <p class="prose cite-sub">and the tree sampler:</p>
+    <div class="cite-block">
+      <button class="cite-copy" type="button">Copy</button>
+      <pre>@misc{bendel2026goodbyedriftanchoredtree,
+      title={Goodbye Drift: Anchored Tree Sampling for Long-Horizon Video-to-Video Generation},
+      author={Matthew Bendel and Stephen W. Bailey and Mithilesh Vaidya and Sumukh Badam and Xingzhe He},
+      year={2026},
+      eprint={2605.20476},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2605.20476},
+}</pre>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>Descript, Inc. · Video Inpainting</p>
+    <p class="footer__muted">
+      © 2026 Descript, Inc. ·
+      <a href="https://descriptinc.github.io/ATS/" target="_blank" rel="noopener">ATS ↗</a> ·
+      <a href="https://descriptinc.github.io/video-outpainting/">Video Outpainting</a> ·
+      <a href="https://descriptinc.github.io/video-regenerate/">Video Regenerate</a> ·
+      <a href="https://descriptinc.github.io/jumpcut-smoothing/">Jumpcut Smoothing</a> ·
+      <a href="#top">Back to top ↑</a>
+    </p>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
